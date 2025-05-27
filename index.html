@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8" />
+ <meta name="viewport" content="width=device-width, initial-scale=1" />
+ <title>Termer</title>
+ <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap" rel="stylesheet" />
+ <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+
+ <div id="settings-container">
+   <button id="settings-button" onclick="toggleSettingsPanel()">SETTINGS</button>
+   <div class="settings-panel" id="settingsPanel" style="display:none;">
+     <div class="settings-section">
+       <div class="settings-title">APPEARANCE</div>
+       <div class="settings-row">
+         <span>Theme:</span>
+         <select id="themeSelect" onchange="changeTheme()">
+           <option value="dark">Dark Mode</option>
+           <option value="light">Light Mode</option>
+           <option value="custom">Custom Mode</option>
+         </select>
+       </div>
+       <div id="customThemeOptions" style="display: none; margin-top: 0.5rem;">
+         <div style="margin-bottom: 0.5rem;">
+           <span>Background:</span>
+           <input type="color" id="customBgColor" value="#000000" onchange="updateCustomTheme()">
+         </div>
+         <div style="margin-bottom: 0.5rem;">
+           <span>Text:</span>
+           <input type="color" id="customTextColor" value="#ffffff" onchange="updateCustomTheme()">
+         </div>
+         <div>
+         </div>
+       </div>
+     </div>
+     <hr>
+     <div class="settings-section">
+       <div class="settings-title">TIME FORMAT</div>
+       <div class="settings-row">
+         <span>Clock Format:</span>
+         <select id="timeFormatSelect"> <!-- REMOVED onchange="saveSettings()" -->
+           <option value="12h" selected>12-hour</option>
+           <option value="24h">24-hour</option>
+         </select>
+       </div>
+     </div>
+     <hr>
+     <div class="settings-section">
+       <div class="settings-title">SOUND</div>
+       <div class="sound-upload">
+         <span>Timer End Sound:</span>
+         <span id="currentSound">success.mp3</span>
+         <label class="sound-upload-btn">
+           Change
+           <input type="file" id="soundUpload" accept=".mp3" style="display: none;" onchange="handleSoundUpload()">
+         </label>
+       </div>
+     </div>
+     <hr>
+     <div class="settings-section">
+       <div class="settings-title">REPEATERS</div>
+       <div class="settings-row">
+         <span>[###...]</span>
+         <label class="switch">
+           <input type="checkbox" id="repeaterStyleHash" onchange="updateRepeaterStyle(this, 'hash')">
+           <span class="slider"></span>
+         </label>
+       </div>
+       <div class="settings-row">
+         <span>[███...]</span>
+         <label class="switch">
+           <input type="checkbox" id="repeaterStyleBlock" onchange="updateRepeaterStyle(this, 'block')">
+           <span class="slider"></span>
+         </label>
+       </div>
+       <div class="settings-row">
+         <span>Custom</span>
+         <label class="switch">
+           <input type="checkbox" id="repeaterStyleCustomToggle" onchange="toggleCustomRepeaterSection()">
+           <span class="slider"></span>
+         </label>
+       </div>
+       <div id="customRepeaterSection" style="display: none; margin-top: 0.5rem;">
+         <div id="addCustomRepeatersText" style="cursor: pointer; text-decoration: underline; margin-bottom: 0.5rem;" onclick="showCustomRepeaterInputs()">
+           [add custom repeaters]
+         </div>
+         <div id="customRepeaterInputBoxes" style="display: none;">
+           <div style="margin-bottom: 0.5rem;">
+             <span>Filled:</span>
+             <input type="text" id="customRepeaterFilled" maxlength="3" style="width: 50px;" oninput="updateCustomRepeaterPreview()">
+           </div>
+           <div>
+             <span>Unfilled:</span>
+             <input type="text" id="customRepeaterUnfilled" maxlength="3" style="width: 50px;" oninput="updateCustomRepeaterPreview()">
+           </div>
+           <div style="margin-top: 0.5rem;">
+             Preview: <span id="customRepeaterPreview"></span>
+           </div>
+         </div>
+       </div>
+     </div>
+     <hr>
+     <div class="settings-section">
+       <div class="settings-title">VIEW OPTIONS</div>
+       <div class="settings-row">
+         <span>Simplified View:</span>
+         <label class="switch">
+           <input type="checkbox" id="simplifiedViewToggle" onchange="toggleSimplifiedView()">
+           <span class="slider"></span>
+         </label>
+       </div>
+       <div id="simplifiedViewOptions" style="display: none; margin-top: 1rem;">
+         <div class="settings-title">CUSTOMIZE SIMPLIFIED VIEW</div>
+         <div>Current Format: <span id="currentFormatText">[TASKNAME] | [TIMELEFT]</span></div>
+         <div style="margin: 0.5rem 0;">
+           <div>Available Options:</div>
+           <div>
+             <span class="format-option" draggable="true" data-format="[TASKNAME]">[TASKNAME]</span>
+             <span class="format-option" draggable="true" data-format="[TIMELEFT]">[TIMELEFT]</span>
+             <span class="format-option" draggable="true" data-format="[TIMEUNTIL]">[TIMEUNTIL]</span>
+             <span class="format-option" draggable="true" data-format="[NOTES]">[NOTES]</span>
+           </div>
+         </div>
+         <div style="margin: 0.5rem 0;">
+           <div>Your Format:</div>
+           <div id="customFormatContainer" style="min-height: 40px; border: 1px dashed white; padding: 0.5rem; margin-top: 0.5rem;">
+             <span class="format-option" data-format="[TASKNAME]">[TASKNAME]</span>
+             <span class="format-option" data-format="[TIMELEFT]">[TIMELEFT]</span>
+           </div>
+         </div>
+         <div class="format-preview" id="simplifiedPreview">
+           [TASKNAME] | [TIMELEFT]
+         </div>
+       </div>
+       <div style="margin-top: 1rem;">
+         <div>Box Radius:</div>
+         <input type="range" id="boxRadiusSlider" min="0" max="20" value="0" oninput="updateBoxRadius()">
+       </div>
+       <div class="format-preview" style="margin-top: 0.5rem;">
+         <span id="boxRadiusValue">0px</span>
+       </div>
+     </div>
+     <hr>
+     <div class="settings-section">
+       <div class="settings-title">ABOUT</div>
+       <div style="font-size: 0.9rem; line-height: 1.4;">
+         Hi, I'm someone who loves the terminal and Linux Mint's Timer Applet but is forced to use Windows for most of my work. So, I made this!
+         <br><br>
+         Let me know if you want any features added!
+       </div>
+     </div>
+   </div>
+ </div>
+
+
+ <div id="task-container"></div>
+
+
+ <button id="bigAddButton" class="button">+ ADD NEW TASK</button>
+
+
+ <div id="addButtonContainer" style="display:none;">
+   <button class="button" onclick="toggleAddPanel()">+ ADD NEW</button>
+ </div>
+
+
+ <div class="add-panel" id="addPanel" style="display:none;">
+   <div>TIME: <input class="input" id="timeInput" placeholder="1h 30m 10s" autocomplete="off" /></div>
+   <div>TASK: <input class="input" id="taskNameInput" placeholder="Task" autocomplete="off" /></div>
+   <div>NOTE: <input class="input" id="notesInput" placeholder="Notes" autocomplete="off" /></div>
+   <div class="color-boxes" id="colorPicker">
+     <div class="custom-color-box" title="Custom color">
+       <input type="color" class="custom-color-input" id="customColorInput" value="#ffffff" />
+     </div>
+   </div>
+   <button id="startButton" class="button" onclick="startTask()">START</button>
+ </div>
+
+
+ <div class="bottom-controls" id="bottomControls" style="display:none;">
+   <button id="addBottomButton" class="button" onclick="toggleAddPanel()">+ ADD NEW TASK</button>
+   <button class="button" onclick="clearFinishedTasks()">CLEAR FINISHED TASKS</button>
+ </div>
+
+
+
+
+ <audio id="successSound" src="success.mp3"></audio>
+
+
+ <script src="script.js"></script>
+</body>
+</html>
+

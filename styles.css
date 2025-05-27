@@ -1,0 +1,739 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  background-color: black;
+  color: white;
+  font-family: 'JetBrains Mono', monospace;
+  --custom-text: white; /* Explicitly define for dark mode */
+  --switch-on-text-color: #4CAF50; /* Green for ON */
+  --switch-off-text-color: #757575; /* Grey for OFF */
+}
+body.light-mode {
+  background-color: #f0f0f0;
+  color: #333;
+  --custom-text: #333; /* Explicitly define for light mode */
+  --switch-on-text-color: #388E3C; /* Darker Green for ON */
+  --switch-off-text-color: #BDBDBD; /* Lighter Grey for OFF */
+}
+body.custom-mode {
+  background-color: var(--custom-bg, black);
+  color: var(--custom-text, white);
+  /* For custom mode, ON/OFF colors could be fixed or derive from custom vars */
+  --switch-on-text-color: #4CAF50; /* Default Green for ON */
+  --switch-off-text-color: #757575; /* Default Grey for OFF */
+  /* --switch-slider-bg-color: var(--custom-hover, #444); Removed */
+}
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  align-items: center;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+hr {
+  border: none;
+  height: 1px;
+  background-color: white; /* Default for dark mode */
+  margin: 1rem 0; /* Consistent margin */
+}
+
+body.light-mode hr {
+  background-color: #ccc; /* Lighter for light mode */
+}
+
+body.custom-mode hr {
+  background-color: var(--custom-text, white); /* Use custom text color */
+}
+
+#settings-container {
+  width: 90%;
+  max-width: 700px;
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  position: relative; /* Added for positioning context */
+}
+
+#settings-button {
+  border: 1px solid white;
+  color: white;
+  background: black;
+  padding: 0.3rem 1rem;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  user-select: none;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode #settings-button {
+  border: 1px solid #333;
+  color: #333;
+  background: #f0f0f0;
+}
+body.custom-mode #settings-button {
+  border: 1px solid var(--custom-text, white);
+  color: var(--custom-text, white);
+  background: var(--custom-bg, black);
+}
+
+#task-container {
+  width: 90%;
+  max-width: 700px;
+  height: 100%;
+  margin-top: 1rem;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+}
+
+.task {
+  border: 1px solid white;
+  padding: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 1rem;
+  white-space: pre-wrap;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  word-break: break-word;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .task {
+  border: 1px solid #333;
+}
+body.custom-mode .task {
+  border: 1px solid var(--custom-text, white);
+}
+
+.task.simplified {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1rem;
+}
+
+.task.paused {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0.15) 2px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+body.light-mode .task.paused {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(0, 0, 0, 0.1),
+    rgba(0, 0, 0, 0.1) 2px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+body.custom-mode .task.paused {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--custom-pause, rgba(255, 255, 255, 0.15)),
+    var(--custom-pause, rgba(255, 255, 255, 0.15)) 2px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+/* Add button container */
+#addButtonContainer {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+  width: 90%;
+  max-width: 700px;
+}
+
+.button {
+  border: 1px solid white;
+  color: white;
+  background: black;
+  padding: 0.6rem 2rem;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: center;
+  display: inline-block;
+  user-select: none;
+  min-width: 180px;
+  transition: background-color 0.2s ease;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .button {
+  border: 1px solid #333;
+  color: #333;
+  background: #f0f0f0;
+}
+body.custom-mode .button {
+  border: 1px solid var(--custom-text, white);
+  color: var(--custom-text, white);
+  background: var(--custom-bg, black);
+}
+
+.add-panel {
+  position: fixed;
+  inset: 0; /* Shorthand for top:0, right:0, bottom:0, left:0 */
+  width: 80%;
+  max-width: 700px;
+  height: fit-content; /* Allow height to be determined by content */
+  margin: auto; /* Center the panel within the inset bounds */
+  padding: 1rem;
+  border: 1px solid white;
+  box-sizing: border-box;
+  text-align: center;
+  background-color: black;
+  border-radius: var(--task-radius, 0px);
+  z-index: 101;
+  /* top, left, and transform removed in favor of inset and margin:auto */
+}
+body.light-mode .add-panel {
+  border: 1px solid #333;
+  background-color: #f0f0f0;
+}
+body.custom-mode .add-panel {
+  border: 1px solid var(--custom-text, white);
+  background-color: var(--custom-bg, black);
+}
+
+.input {
+  width: 90%;
+  padding: 4px;
+  background: black;
+  color: white;
+  border: 1px solid white;
+  margin: 5px 0;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: center;
+  box-sizing: border-box;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .input {
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid #333;
+}
+body.custom-mode .input {
+  background: var(--custom-bg, black);
+  color: var(--custom-text, white);
+  border: 1px solid var(--custom-text, white);
+}
+
+.color-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 1rem;
+  justify-content: center;
+  align-items: center;
+}
+
+.color-box {
+  width: 20px;
+  height: 20px;
+  border: 1px solid white;
+  cursor: pointer;
+  position: relative;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .color-box {
+  border: 1px solid #333;
+}
+body.custom-mode .color-box {
+  border: 1px solid var(--custom-text, white);
+}
+/* Make Background, Text, Hover color pickers in Appearance settings have a 2px border */
+.settings-panel .settings-section:first-of-type .settings-row .color-box {
+  border-width: 2px;
+}
+/* This assumes "Appearance" is the first settings-section.
+   If these color boxes have specific IDs (e.g., #bgColorBox, #textColorBox, #hoverColorBox),
+   targeting those IDs would be more robust.
+   For now, proceeding with the structural selector. */
+
+.custom-color-box {
+  width: 20px;
+  height: 20px;
+  border: 1px solid white;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .custom-color-box {
+  border: 1px solid #333;
+}
+body.custom-mode .custom-color-box {
+  border: 1px solid var(--custom-text, white);
+}
+
+.custom-color-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+#startButton {
+  margin-top: 1rem;
+  width: 100%;
+  max-width: 300px;
+  padding: 0.8rem 0;
+  font-size: 1rem;
+}
+
+/* Hide notes line if empty */
+.task .notes {
+  margin-top: 0.5rem;
+}
+
+/* Big add button when no tasks */
+#bigAddButton {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 1.5rem 3rem;
+  font-size: 1.2rem;
+  border-radius: var(--task-radius, 0px);
+}
+
+/* Bottom controls container */
+.bottom-controls {
+  width: 90%;
+  max-width: 700px;
+  margin: 1rem auto 2rem auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Right-click menu */
+.context-menu {
+  position: absolute;
+  background: black;
+  border: 1px solid white;
+  padding: 0.5rem 0;
+  z-index: 100;
+  min-width: 150px;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .context-menu {
+  background: #f0f0f0;
+  border: 1px solid #333;
+}
+body.custom-mode .context-menu {
+  background: var(--custom-bg, black);
+  border: 1px solid var(--custom-text, white);
+}
+.context-menu-item {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+/* Settings panel */
+.settings-panel {
+  position: absolute;
+  top: 100%; /* Position below the settings button */
+  right: 0; /* Align to the right of the settings-container */
+  margin-top: 5px; /* Optional: add a small gap */
+  border: 1px solid white;
+  padding: 1rem;
+  background: black;
+  z-index: 100;
+  max-width: 300px;
+  max-height: 80vh;
+  overflow-y: auto;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .settings-panel {
+  border: 1px solid #333;
+  background: #f0f0f0;
+}
+body.custom-mode .settings-panel {
+  border: 1px solid var(--custom-text, white);
+  background: var(--custom-bg, black);
+}
+.settings-option {
+  margin-bottom: 1rem;
+}
+.settings-title {
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+select {
+  background: black;
+  color: white;
+  border: 1px solid white;
+  padding: 0.2rem;
+  font-family: 'JetBrains Mono', monospace;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode select {
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid #333;
+}
+body.custom-mode select {
+  background: var(--custom-bg, black);
+  color: var(--custom-text, white);
+  border: 1px solid var(--custom-text, white);
+}
+.settings-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid white;
+}
+body.light-mode .settings-section {
+  border-bottom: 1px solid #333;
+}
+body.custom-mode .settings-section {
+  border-bottom: 1px solid var(--custom-text, white);
+}
+.format-preview {
+  border: 1px solid white;
+  padding: 1rem;
+  margin-top: 1rem;
+  text-align: center;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .format-preview {
+  border: 1px solid #333;
+}
+body.custom-mode .format-preview {
+  border: 1px solid var(--custom-text, white);
+}
+.format-option {
+  display: inline-block;
+  padding: 0.3rem 0.6rem;
+  margin: 0.2rem;
+  border: 1px dashed white;
+  cursor: pointer;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .format-option {
+  border: 1px dashed #333;
+}
+body.custom-mode .format-option {
+  border: 1px dashed var(--custom-text, white);
+}
+.format-option:hover {
+  background: rgba(255,255,255,0.1);
+}
+body.light-mode .format-option:hover {
+  background: rgba(0,0,0,0.1);
+}
+
+.add-color-btn {
+  padding: 0.2rem 0.5rem;
+  margin-left: 0.5rem;
+  border: 1px solid white;
+  cursor: pointer;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .add-color-btn {
+  border: 1px solid #333;
+}
+body.custom-mode .add-color-btn {
+  border: 1px solid var(--custom-text, white);
+}
+.color-preset {
+  position: relative;
+}
+.color-preset:hover::after {
+  content: 'Right click to delete';
+  position: absolute;
+  top: -20px;
+  left: 0;
+  background: black;
+  color: white;
+  padding: 0.2rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  border: 1px solid white;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .color-preset:hover::after {
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid #333;
+}
+body.custom-mode .color-preset:hover::after {
+  background: var(--custom-bg, black);
+  color: var(--custom-text, white);
+  border: 1px solid var(--custom-text, white);
+}
+.sound-upload {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sound-upload-btn {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid white;
+  cursor: pointer;
+  border-radius: var(--task-radius, 0px);
+}
+body.light-mode .sound-upload-btn {
+  border: 1px solid #333;
+}
+body.custom-mode .sound-upload-btn {
+  border: 1px solid var(--custom-text, white);
+}
+
+/* Input placeholder colors */
+body.light-mode .input::placeholder {
+  color: #999;
+}
+body.custom-mode .input::placeholder {
+  color: var(--custom-placeholder, #999);
+}
+
+input:focus, textarea:focus {
+  outline: 2px solid var(--accent-color, #79cdff);
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* For simplified view alignment */
+.task.simplified {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.task.simplified > span:first-child {
+  text-align: left;
+  flex-grow: 1;
+}
+
+.task.simplified > span:last-child {
+  text-align: right;
+}
+
+/* SCROLLBAR */
+.preview-box {
+  transition: border-radius 0.2s ease;
+}
+
+
+::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
+
+::-webkit-scrollbar-track {
+  background: #00000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #00000000;
+  border-radius: 0px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00000000;
+}
+
+/* Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 90px; /* Increased width */
+  height: 28px;
+  background-color: transparent; 
+  border: 1px solid var(--custom-text); 
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  border-radius: var(--task-radius, 4px); 
+  box-sizing: border-box; /* Ensure padding/border don't add to width/height */
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute; /* Changed from nothing to allow filling the switch */
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: transparent; /* Slider background is now transparent */
+  border-radius: var(--task-radius, 3px); 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  transition: background-color 0.3s; /* Smooth transition for slider bg */
+}
+
+.slider::before {
+  /* Common styles for both ON and OFF states */
+  font-size: 14px; /* Adjusted for new width */
+  font-weight: bold;
+  line-height: 1; /* Helps with vertical centering in flex */
+  text-transform: uppercase;
+}
+
+/* Show "ON" when checked */
+.switch input:checked + .slider::before {
+  content: "ON";
+  color: var(--switch-on-text-color); /* Use CSS variable */
+  /* align-self: left; Removed */
+}
+
+/* Show "OFF" when not checked */
+.switch input:not(:checked) + .slider::before {
+  content: "OFF";
+  color: var(--switch-off-text-color); /* Use CSS variable */
+}
+
+hr {
+  margin-top: 5px;
+  margin-bottom: 20px;
+  border: none;
+  border-top: 1px solid var(--custom-text);
+  height: 0;
+}
+
+/* R A N G E */
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 24px;
+  background: transparent;
+  outline: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Track --- minimal 2px bar */
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--custom-text);
+  border-radius: 0;
+}
+
+input[type="range"]::-moz-range-track {
+  height: 2px;
+  background: var(--custom-text);
+  border-radius: 0;
+}
+
+/* Thumb [2px] style */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 6px;
+  height: 14px;
+  background: var(--custom-text);
+  border: none;
+  border-radius: 1px;
+  cursor: pointer;
+  margin-top: -6px; /* aligns thumb vertically with 2px track */
+  box-shadow: 0 0 2px #000;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 6px;
+  height: 14px;
+  background: var(--custom-text);
+  border: none;
+  border-radius: 1px;
+  cursor: pointer;
+  box-shadow: 0 0 2px #000;
+}
+
+/* Hover/focus states */
+input[type="range"]:hover::-webkit-slider-thumb,
+input[type="range"]:focus::-webkit-slider-thumb {
+  background: var(--custom-text);
+  box-shadow: 0 0 5px rgba(46, 204, 64, 0.8);
+}
+
+input[type="range"]:hover::-moz-range-thumb,
+input[type="range"]:focus::-moz-range-thumb {
+  background: var(--custom-text);
+  box-shadow: 0 0 5px rgba(46, 204, 64, 0.8);
+}
+
+/* Optional terminal-style value display */
+.terminal-range-container {
+  position: relative;
+  margin: 20px 0;
+}
+
+.terminal-range-value {
+  position: absolute;
+  top: -25px;
+  left: 0;
+  color: #2ecc40;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  background: #0a0a0a;
+  padding: 2px 5px;
+  border: 1px solid #2ecc40;
+  border-radius: 3px;
+}
+
+
+.custom-color-inputs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.custom-color-input-wrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.custom-color-input-wrapper label {
+  min-width: 100px;
+  margin-right: 10px;
+}
+
+.custom-color-input-wrapper input[type="color"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 30px;
+  border: 1px solid var(--custom-text); /* Thin border */
+  border-radius: 4px;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.custom-color-input-wrapper input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.custom-color-input-wrapper input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
