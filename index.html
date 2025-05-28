@@ -41,7 +41,7 @@
        <div class="settings-title">TIME FORMAT</div>
        <div class="settings-row">
          <span>Clock Format:</span>
-         <select id="timeFormatSelect"> <!-- REMOVED onchange="saveSettings()" -->
+         <select id="timeFormatSelect">
            <option value="12h" selected>12-hour</option>
            <option value="24h">24-hour</option>
          </select>
@@ -213,12 +213,10 @@
 
  <audio id="successSound" src="success.mp3"></audio>
 
- <!-- Capacitor Core (for mobile support) -->
  <script type="module">
    import { Capacitor } from '@capacitor/core';
    import { Preferences } from '@capacitor/preferences';
    
-   // Make Capacitor available globally for the main script
    window.Capacitor = Capacitor;
    if (!window.Capacitor.Plugins) {
      window.Capacitor.Plugins = {};
