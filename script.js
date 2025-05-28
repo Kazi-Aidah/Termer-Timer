@@ -1,3 +1,7 @@
+// Background task variables
+let backgroundTaskId = null;
+let isBackgroundModeEnabled = false;
+
 const darkModeColors = {
    red: '#ff7979', orange: '#ffb479', yellow: '#ffd979', green: '#c4ff79', cyan: '#79ffc9',
    sky: '#79fcff', blue: '#79cdff', purple: '#9f79ff', magenta: '#ea79ff', pink: '#ff79b6', lightbrown: '#cca995',
@@ -141,7 +145,7 @@ let repeaterLength = 10; // Default length for the repeater string
    }
  }
   // Change theme
- function changeTheme(theme = null, save = true) {
+ async function changeTheme(theme = null, save = true) {
    console.log(`[DEBUG Kilo] changeTheme: Called with theme: ${theme}, save: ${save}`);
    if (!theme) {
      theme = document.getElementById('themeSelect').value;
@@ -152,7 +156,7 @@ let repeaterLength = 10; // Default length for the repeater string
   
    if (theme === 'custom') {
      document.getElementById('customThemeOptions').style.display = 'block';
-     updateCustomTheme(false);
+     await updateCustomTheme(false);
     
      // Determine which color set to use based on background brightness
      const bgColor = document.getElementById('customBgColor').value;
@@ -187,7 +191,7 @@ let repeaterLength = 10; // Default length for the repeater string
        }
      }
    });
-  if (save) saveSettings();
+  if (save) await saveSettings();
   updateThemeOptionLabelColors(); // Call new function
   console.log(`[DEBUG Kilo] changeTheme: Final body.className: ${document.body.className}`);
   console.log(`[DEBUG Kilo] changeTheme: Final body.style.--custom-text: ${document.body.style.getPropertyValue('--custom-text')}`);
@@ -209,7 +213,7 @@ function updateThemeOptionLabelColors() {
 }
 
 // Update custom theme colors
-function updateCustomTheme(save = true) {
+async function updateCustomTheme(save = true) {
   console.log(`[DEBUG Kilo] updateCustomTheme: Called with save: ${save}`);
   const bgColor = document.getElementById('customBgColor').value;
   const textColor = document.getElementById('customTextColor').value;
@@ -227,7 +231,7 @@ function updateCustomTheme(save = true) {
   updateSettingsColorPicker();
   updateThemeOptionLabelColors(); // Call new function
 
-  if (save) saveSettings();
+  if (save) await saveSettings();
   console.log(`[DEBUG Kilo] updateCustomTheme: Final body.style.--custom-bg: ${document.body.style.getPropertyValue('--custom-bg')}`);
   console.log(`[DEBUG Kilo] updateCustomTheme: Final body.style.--custom-text: ${document.body.style.getPropertyValue('--custom-text')}`);
 }
@@ -384,10 +388,38 @@ function removeSettingSeparators() {
     isLoadingSettings = true; // Ensure this is set
     try {
       console.log('[DEBUG Kilo] loadSettings: Starting.');
-      console.log('[Renderer Process] loadSettings: Attempting to get settings via window.electronAPI.getSettings()');
-      const settings = await window.electronAPI.getSettings(); // Use await to get settings
-      console.log('[Renderer Process] loadSettings: Received settings object:', settings);
-      console.log('[DEBUG Kilo] loadSettings: Raw settings from store:', JSON.stringify(settings));
+      
+      let settings = {};
+      
+      // Check if we're running in Capacitor (mobile) or Electron (desktop)
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences) {
+        console.log('[Renderer Process] loadSettings: Running on mobile, using Capacitor Preferences');
+        try {
+          const { Preferences } = window.Capacitor.Plugins;
+          const result = await Preferences.get({ key: 'timerSettings' });
+          if (result.value) {
+            settings = JSON.parse(result.value);
+            console.log('[Renderer Process] loadSettings: Loaded settings from Capacitor Preferences:', settings);
+          } else {
+            console.log('[Renderer Process] loadSettings: No settings found in Capacitor Preferences');
+          }
+        } catch (error) {
+          console.error('[Renderer Process] loadSettings: Error loading from Capacitor Preferences:', error);
+        }
+      } else if (window.electronAPI && window.electronAPI.getSettings) {
+        console.log('[Renderer Process] loadSettings: Running on desktop, using Electron API');
+        settings = await window.electronAPI.getSettings(); // Use await to get settings
+        console.log('[Renderer Process] loadSettings: Received settings object from Electron:', settings);
+      } else {
+        console.log('[Renderer Process] loadSettings: No storage API available, using localStorage fallback');
+        const storedSettings = localStorage.getItem('timerSettings');
+        if (storedSettings) {
+          settings = JSON.parse(storedSettings);
+          console.log('[Renderer Process] loadSettings: Loaded settings from localStorage:', settings);
+        }
+      }
+      
+      console.log('[DEBUG Kilo] loadSettings: Final settings object:', JSON.stringify(settings));
 
       if (settings && Object.keys(settings).length > 0) { // Check if settings object is not empty
     
@@ -436,13 +468,15 @@ function removeSettingSeparators() {
      }
     
      // Sound
-     if (settings.soundName) {
-       const soundNameElement = document.getElementById('currentSound'); // Corrected ID
-       if (soundNameElement) {
-         soundNameElement.textContent = settings.soundName;
-       } else {
-         console.warn("[Renderer Process] loadSettings: currentSound element not found."); // Corrected log
-       }
+    if (settings.soundName) {
+      const soundNameElement = document.getElementById('currentSound');
+      if (soundNameElement) {
+        const soundNameParagraph = document.createElement('p');
+        soundNameParagraph.appendChild(soundNameElement);
+        soundNameElement.textContent = settings.soundName;
+      } else {
+        console.warn("[Renderer Process] loadSettings: currentSound element not found.");
+      }
        if (settings.soundData) {
          const audio = document.getElementById('successSound');
          audio.src = settings.soundData;
@@ -462,6 +496,22 @@ function removeSettingSeparators() {
        updateFormatPreview();
      }
     
+     // Background mode
+     if (settings.backgroundMode !== undefined) {
+       const backgroundToggle = document.getElementById('backgroundModeToggle');
+       if (backgroundToggle) {
+         backgroundToggle.checked = settings.backgroundMode;
+       }
+     }
+
+     // Notifications
+     if (settings.notifications !== undefined) {
+       const notificationsToggle = document.getElementById('notificationsToggle');
+       if (notificationsToggle) {
+         notificationsToggle.checked = settings.notifications;
+       }
+     }
+
      // Box radius
      if (settings.boxRadius !== undefined) {
        boxRadius = settings.boxRadius;
@@ -540,7 +590,7 @@ function removeSettingSeparators() {
    console.log('[DEBUG Kilo] loadSettings: Finished.');
  }
   // Save settings using electron-store via preload
-  function saveSettings() {
+  async function saveSettings() {
     if (isLoadingSettings) {
       console.log('[Renderer Process] saveSettings: Suppressed during initial load.');
       return;
@@ -554,6 +604,8 @@ function removeSettingSeparators() {
        bg: document.getElementById('customBgColor').value,
        text: document.getElementById('customTextColor').value
      },
+     backgroundMode: document.getElementById('backgroundModeToggle')?.checked || false,
+     notifications: document.getElementById('notificationsToggle')?.checked || false,
      timeFormat: timeFormat, // This should be '12h' or '24h'
      soundName: document.getElementById('currentSound').textContent, // CORRECTED ID
      soundData: document.getElementById('successSound').src,
@@ -564,31 +616,55 @@ function removeSettingSeparators() {
      repeaterStyle: currentRepeaterStyle,
      customRepeaterChars: { filled: customRepeaterFilled, unfilled: customRepeaterUnfilled }
    };
-   console.log('[Renderer Process] saveSettings: Settings object to be sent:', settings);
-   window.electronAPI.setSettings(settings); // Send settings to main process
-   console.log('[Renderer Process] saveSettings: Settings sent to main process.');
- }
-  // Handle sound upload
- function handleSoundUpload() {
-   const fileInput = document.getElementById('soundUpload');
-   if (fileInput.files.length > 0) {
-     const file = fileInput.files[0];
-     if (file.type.startsWith('audio/')) {
-       const reader = new FileReader();
-       reader.onload = function(e) {
-         const audio = document.getElementById('successSound');
-         audio.src = e.target.result;
-         document.getElementById('currentSound').textContent = file.name; // Corrected ID
-         saveSettings();
-       };
-       reader.readAsDataURL(file);
-     } else {
-       alert('Please upload an audio file.');
+   console.log('[Renderer Process] saveSettings: Settings object to be saved:', settings);
+   
+   // Check if we're running in Capacitor (mobile) or Electron (desktop)
+   if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences) {
+     console.log('[Renderer Process] saveSettings: Running on mobile, using Capacitor Preferences');
+     try {
+       const { Preferences } = window.Capacitor.Plugins;
+       await Preferences.set({
+         key: 'timerSettings',
+         value: JSON.stringify(settings)
+       });
+       console.log('[Renderer Process] saveSettings: Settings saved to Capacitor Preferences successfully');
+     } catch (error) {
+       console.error('[Renderer Process] saveSettings: Error saving to Capacitor Preferences:', error);
+       // Fallback to localStorage
+       localStorage.setItem('timerSettings', JSON.stringify(settings));
+       console.log('[Renderer Process] saveSettings: Fallback to localStorage completed');
      }
+   } else if (window.electronAPI && window.electronAPI.setSettings) {
+     console.log('[Renderer Process] saveSettings: Running on desktop, using Electron API');
+     window.electronAPI.setSettings(settings); // Send settings to main process
+     console.log('[Renderer Process] saveSettings: Settings sent to Electron main process');
+   } else {
+     console.log('[Renderer Process] saveSettings: No storage API available, using localStorage fallback');
+     localStorage.setItem('timerSettings', JSON.stringify(settings));
+     console.log('[Renderer Process] saveSettings: Settings saved to localStorage');
    }
  }
+  // Handle sound upload
+  function handleSoundUpload() {
+    const fileInput = document.getElementById('soundUpload');
+    if (fileInput.files.length > 0) {
+      const file = fileInput.files[0];
+      if (file.type.startsWith('audio/')) {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+          const audio = document.getElementById('successSound');
+          audio.src = e.target.result;
+          document.getElementById('currentSound').textContent = file.name; // Corrected ID
+          await saveSettings();
+        };
+        reader.readAsDataURL(file);
+      } else {
+        alert('Please upload an audio file.');
+      }
+    }
+  }
   // Add new color to presets
- function addNewColor() {
+ async function addNewColor() {
    const newColor = prompt('Enter a hex color (e.g., #ff0000 for red):');
    if (newColor && /^#[0-9A-F]{6}$/i.test(newColor)) {
      const colorName = `custom${Object.keys(customColors).length + 1}`;
@@ -596,16 +672,64 @@ function removeSettingSeparators() {
      currentColorSet = {...darkModeColors, ...customColors}; // Rebuild currentColorSet
      updateColorBoxes();
      updateSettingsColorPicker();
-     saveSettings();
+     await saveSettings();
    } else if (newColor) {
      alert('Please enter a valid hex color (e.g., #ff0000).');
    }
  }
   // Toggle simplified view
- function toggleSimplifiedView() {
+ async function toggleSimplifiedView() {
    simplifiedView = document.getElementById('simplifiedViewToggle').checked;
    updateAllTaskDisplays();
-   saveSettings();
+   await saveSettings();
+ }
+
+ // Background mode setting toggle
+ async function toggleBackgroundModeSetting() {
+   const toggle = document.getElementById('backgroundModeToggle');
+   const isEnabled = toggle.checked;
+   
+   console.log('[Background] Background mode setting toggled:', isEnabled);
+   
+   // Save the setting
+   await saveSettings();
+   
+   if (isEnabled) {
+     // If there are active timers, enable background mode immediately
+     const activeTasks = [...taskContainer.children].filter(task =>
+       task.dataset.finished !== 'true'
+     );
+     
+     if (activeTasks.length > 0) {
+       await enableBackgroundMode();
+     }
+   } else {
+     // Disable background mode if it's currently enabled
+     if (isBackgroundModeEnabled) {
+       await disableBackgroundMode();
+     }
+   }
+ }
+
+ // Notifications setting toggle
+ async function toggleNotificationsSetting() {
+   const toggle = document.getElementById('notificationsToggle');
+   const isEnabled = toggle.checked;
+   
+   console.log('[Notification] Notifications setting toggled:', isEnabled);
+   
+   // Save the setting
+   await saveSettings();
+   
+   // If enabling notifications, request permission for web browsers
+   if (isEnabled && 'Notification' in window && Notification.permission === 'default') {
+     try {
+       const permission = await Notification.requestPermission();
+       console.log('[Notification] Permission request result:', permission);
+     } catch (error) {
+       console.error('[Notification] Error requesting permission:', error);
+     }
+   }
  }
   // Update format preview
   function updateFormatPreview() {
@@ -662,7 +786,7 @@ function removeSettingSeparators() {
      e.preventDefault();
    });
   
-   preview.addEventListener('drop', (e) => {
+   preview.addEventListener('drop', async (e) => {
      e.preventDefault();
      const format = e.dataTransfer.getData('text/plain');
     
@@ -703,7 +827,7 @@ function removeSettingSeparators() {
      }
     
      // Update simplified format
-     updateSimplifiedFormatFromPreview();
+     await updateSimplifiedFormatFromPreview();
    });
   
    // Make existing preview elements draggable
@@ -722,7 +846,7 @@ function removeSettingSeparators() {
    });
  }
   // Update simplified format from preview
- function updateSimplifiedFormatFromPreview() {
+ async function updateSimplifiedFormatFromPreview() {
    const preview = document.getElementById('formatPreview');
    const newFormat = [];
   
@@ -737,10 +861,10 @@ function removeSettingSeparators() {
    simplifiedFormat = newFormat;
    document.getElementById('currentFormatText').textContent = simplifiedFormat.join('');
    updateAllTaskDisplays();
-   saveSettings();
+   await saveSettings();
  }
   // Update box radius
-function updateBoxRadius() {
+async function updateBoxRadius() {
   const slider = document.getElementById('boxRadiusSlider'); // CORRECT ID
   const valueDisplay = document.getElementById('boxRadiusValue'); // Get the span for displaying value
   
@@ -767,17 +891,28 @@ function updateBoxRadius() {
     console.warn("DEBUG: boxRadiusValue span not found.");
   }
 
-  saveSettings();
+  await saveSettings();
 }
 
  // --- REPEATER FUNCTIONS ---
- function generateRepeaterString(progressRatio, filledChar, unfilledChar, totalLength = repeaterLength) {
-   const filledCount = Math.round(progressRatio * totalLength);
-   const unfilledCount = totalLength - filledCount;
-   return `[${filledChar.repeat(filledCount)}${unfilledChar.repeat(unfilledCount)}]`;
- }
+function generateRepeaterString(progressRatio, filledChar, unfilledChar, element = null) {
+  const baseLength = 10; // Minimum number of characters
+  let calculatedLength = baseLength;
+  
+  if (element) {
+    const taskWidth = element.offsetWidth;
+    const avgCharWidth = 10; // More conservative width estimate
+    const paddingBuffer = 60; // Adjust to avoid overflow
+    calculatedLength = Math.max(baseLength, Math.floor((taskWidth - paddingBuffer) / avgCharWidth));
+  }
 
- function updateRepeaterStyle(checkboxElement, styleType) { // styleType is 'hash' or 'block'
+  const filledCount = Math.round(progressRatio * calculatedLength);
+  const unfilledCount = calculatedLength - filledCount;
+  return `[${filledChar.repeat(filledCount)}${unfilledChar.repeat(unfilledCount)}]`;
+}
+
+
+ async function updateRepeaterStyle(checkboxElement, styleType) { // styleType is 'hash' or 'block'
    const hashCheckbox = document.getElementById('repeaterStyleHash');
    const blockCheckbox = document.getElementById('repeaterStyleBlock');
    const customCheckbox = document.getElementById('repeaterStyleCustomToggle');
@@ -813,10 +948,10 @@ function updateBoxRadius() {
    }
    console.log(`[DEBUG] updateRepeaterStyle: currentRepeaterStyle set to: ${currentRepeaterStyle}`);
    updateAllTaskDisplays();
-   saveSettings();
+   await saveSettings();
 }
 
-function toggleCustomRepeaterSection() { // Called by customCheckbox
+async function toggleCustomRepeaterSection() { // Called by customCheckbox
    const customCheckbox = document.getElementById('repeaterStyleCustomToggle');
    const customSection = document.getElementById('customRepeaterSection');
    const hashCheckbox = document.getElementById('repeaterStyleHash');document.getElementById('repeaterStyleCustomToggle').checked = true;
@@ -839,7 +974,7 @@ function toggleCustomRepeaterSection() { // Called by customCheckbox
    }
    console.log(`[DEBUG] toggleCustomRepeaterSection: currentRepeaterStyle set to: ${currentRepeaterStyle}`);
    updateAllTaskDisplays();
-   saveSettings();
+   await saveSettings();
 }
 
 function showCustomRepeaterInputs() {
@@ -864,28 +999,26 @@ function showCustomRepeaterInputs() {
    saveSettings();
 }
 
-function updateCustomRepeaterPreview() {
-   customRepeaterFilled = document.getElementById('customRepeaterFilled').value || '■';
-   customRepeaterUnfilled = document.getElementById('customRepeaterUnfilled').value || '□';
-   const previewSpan = document.getElementById('customRepeaterPreview');
-   if (previewSpan) {
-     previewSpan.textContent = generateRepeaterString(0.5, customRepeaterFilled, customRepeaterUnfilled);
+  async function updateCustomRepeaterPreview() {
+    customRepeaterFilled = document.getElementById('customRepeaterFilled').value || '■';
+    customRepeaterUnfilled = document.getElementById('customRepeaterUnfilled').value || '□';
+    const previewSpan = document.getElementById('customRepeaterPreview');
+    if (previewSpan) {
+     // Changed from 0.5 (50%) to 0.5 (50%) but with total length of 6 (3 filled, 3 unfilled)
+      previewSpan.textContent = generateRepeaterString(0.5, customRepeaterFilled, customRepeaterUnfilled, null, 6);
    }
 
    const customToggleCheckbox = document.getElementById('repeaterStyleCustomToggle');
    if (!customToggleCheckbox.checked) {
-       customToggleCheckbox.checked = true; // This triggers toggleCustomRepeaterSection
-                                         // which sets currentRepeaterStyle = 'custom'
-                                         // and unchecks hash/block.
-   } else { // Custom checkbox is already checked, ensure style is 'custom'.
+       customToggleCheckbox.checked = true;
+   } else {
         currentRepeaterStyle = 'custom';
-        // Ensure other checkboxes are off if user interacts with custom inputs
         document.getElementById('repeaterStyleHash').checked = false;
         document.getElementById('repeaterStyleBlock').checked = false;
    }
    console.log(`[DEBUG] updateCustomRepeaterPreview: customFilled: ${customRepeaterFilled}, customUnfilled: ${customRepeaterUnfilled}, currentRepeaterStyle: ${currentRepeaterStyle}`);
    updateAllTaskDisplays();
-   saveSettings();
+   await saveSettings();
 }
  // --- END REPEATER FUNCTIONS ---
 
@@ -1050,7 +1183,7 @@ function updateCustomRepeaterPreview() {
       
        const nameSpan = document.createElement('span');
        nameSpan.textContent = taskName;
-       nameSpan.style.fontWeight = 'bold';
+       nameSpan.style.fontWeight = 'normal';
        nameSpan.style.flex = '0 1 auto';
        nameSpan.style.textAlign = 'right';
        nameSpan.style.paddingRight = '10px';
@@ -1076,41 +1209,41 @@ function updateCustomRepeaterPreview() {
        container.appendChild(separator);
        container.appendChild(contentSpan);
        div.appendChild(container);
-     } else { // Non-simplified view - Apply repeater styles here
-       const mins = Math.floor(timeLeft / 60);
-       const secs = timeLeft % 60;
-       const percent = totalSec > 0 ? 1 - (timeLeft / totalSec) : 0; // percent is available from outer scope
-       let bar = '';
-       console.log(`[DEBUG] updateTaskDisplay (non-simplified): Task "${taskName}", currentRepeaterStyle: ${currentRepeaterStyle}, customFilled: ${customRepeaterFilled}, customUnfilled: ${customRepeaterUnfilled}`);
+      } else { 
+      // Non-simplified view - Center the content
+      div.style.textAlign = 'center';
+      div.style.whiteSpace = 'pre';
+      div.style.padding = '1rem';
 
-       // currentRepeaterStyle should always have a value (default 'block')
-       let filledChar = '█'; // Default to block characters
-       let unfilledChar = '.'; // Default to block characters
+      const mins = Math.floor(timeLeft / 60);
+      const secs = timeLeft % 60;
+      const percent = totalSec > 0 ? 1 - (timeLeft / totalSec) : 0;
+      
+      let bar = '';
+      let filledChar = '█';
+      let unfilledChar = '.';
 
-       if (currentRepeaterStyle === 'hash') {
-           filledChar = '#';
-           unfilledChar = '.';
-       } else if (currentRepeaterStyle === 'block') {
-           filledChar = '█';
-           unfilledChar = '.';
-       } else if (currentRepeaterStyle === 'custom') {
-           filledChar = customRepeaterFilled;
-           unfilledChar = customRepeaterUnfilled;
-       }
-       // If currentRepeaterStyle was somehow null/undefined, it would use the default initialized filledChar/unfilledChar.
+      if (currentRepeaterStyle === 'hash') {
+        filledChar = '#';
+        unfilledChar = '.';
+      } else if (currentRepeaterStyle === 'custom') {
+        filledChar = customRepeaterFilled;
+        unfilledChar = customRepeaterUnfilled;
+      }
 
-       bar = generateRepeaterString(percent, filledChar, unfilledChar, repeaterLength);
+      bar = generateRepeaterString(percent, filledChar, unfilledChar, div);
 
-       let text =
-`DO ${taskName} UNTIL ${formatTimeUntil(endTime)}
- ${bar}
- TIME LEFT: ${mins}mins ${secs}s${isPaused ? ' (PAUSED)' : ''}`;
-       if (notes) {
-         text += `\nNOTES: ${notes}`;
-       }
-       div.innerText = text;
-     }
-   }
+      let text = `DO ${taskName} UNTIL ${formatTimeUntil(endTime)}\n`;
+      text += ` ${bar}\n`;
+      text += ` TIME LEFT: ${mins}mins ${secs}s${isPaused ? ' (PAUSED)' : ''}`;
+      
+      if (notes) {
+        text += `\nNOTES: ${notes}`;
+      }
+      
+      div.innerText = text;
+    }
+  }
     div.updateDisplay = updateTaskDisplay;
     function startTimer() {
      updateInterval = setInterval(() => {
@@ -1128,6 +1261,13 @@ function updateCustomRepeaterPreview() {
          } catch (e) {
            console.log('Audio error:', e);
          }
+         
+         // Show desktop notification
+         showTimerCompletionNotification(taskName, notes);
+         
+         // Update widget when timer finishes
+         setTimeout(updateWidget, 100);
+         
          div.dataset.finished = 'true';
          div.style.opacity = '0.6';
        }
@@ -1161,8 +1301,32 @@ function updateCustomRepeaterPreview() {
      // Create new menu
      const menu = document.createElement('div');
      menu.className = 'context-menu';
-     menu.style.left = `${e.pageX}px`;
-     menu.style.top = `${e.pageY}px`;
+     
+     // Calculate menu position to keep it within window bounds
+     const menuWidth = 150; // min-width from CSS
+     const menuHeight = 120; // approximate height for 3 items
+     const windowWidth = window.innerWidth;
+     const windowHeight = window.innerHeight;
+     
+     let left = e.pageX;
+     let top = e.pageY;
+     
+     // Adjust horizontal position if menu would go off-screen
+     if (left + menuWidth > windowWidth) {
+       left = windowWidth - menuWidth - 10; // 10px margin from edge
+     }
+     
+     // Adjust vertical position if menu would go off-screen
+     if (top + menuHeight > windowHeight) {
+       top = windowHeight - menuHeight - 10; // 10px margin from edge
+     }
+     
+     // Ensure menu doesn't go off the left or top edges
+     left = Math.max(10, left);
+     top = Math.max(10, top);
+     
+     menu.style.left = `${left}px`;
+     menu.style.top = `${top}px`;
     
      // Add menu items
      const pauseItem = document.createElement('div');
@@ -1346,37 +1510,500 @@ function updateCustomRepeaterPreview() {
      toggleAddPanel();
    }
  });
-  // Initialize the app
- const taskContainer = document.getElementById('task-container');
- const bigAddButton = document.getElementById('bigAddButton');
- const bottomControls = document.getElementById('bottomControls');
- const timeInput = document.getElementById('timeInput'); // Already declared, but good for reference
-  // Load settings when page loads
- window.addEventListener('load', async () => { // Make the callback async
-   console.log('[Renderer Process] Window load event: electronAPI object:', window.electronAPI);
-   initializeEventListeners();
-   await loadSettings(); // Await the completion of loadSettings
-   updateFormatPreview();
-  
-   // Ensure scrollbars are hidden
-   document.documentElement.style.overflow = 'hidden';
-   document.body.style.overflow = 'hidden';
-    // Initial check for task list to show/hide big button
-   if (taskContainer.children.length === 0) {
-     bigAddButton.style.display = 'block';
-     bottomControls.style.display = 'none';
-   } else {
-     bigAddButton.style.display = 'none';
-     bottomControls.style.display = 'flex';
+
+ // Color keyboard shortcuts with Alt key
+ document.body.addEventListener('keydown', (e) => {
+   if (e.altKey && !e.ctrlKey && !e.shiftKey) {
+     let colorKey = null;
+     
+     switch(e.key.toLowerCase()) {
+       case 'r': colorKey = 'red'; break;
+       case 'o': colorKey = 'orange'; break;
+       case 'y': colorKey = 'yellow'; break;
+       case 'g': colorKey = 'green'; break;
+       case 'c': colorKey = 'cyan'; break;
+       case 's': colorKey = 'sky'; break;
+       case 'b': colorKey = 'blue'; break;
+       case 'v': colorKey = 'purple'; break; // v for violet
+       case 'm': colorKey = 'magenta'; break;
+       case 'p': colorKey = 'pink'; break;
+       case 'w': colorKey = 'lightbrown'; break; // w for brown (using lightbrown from color set)
+       case '0': colorKey = 'white'; break;
+       case 'a': colorKey = 'grey'; break; // a for gray
+       case '1': colorKey = 'black'; break;
+     }
+     
+     if (colorKey && currentColorSet[colorKey]) {
+       e.preventDefault();
+       selectedColor = colorKey;
+       updateColorBoxes();
+       updateSettingsColorPicker();
+       console.log(`DEBUG: Color shortcut Alt+${e.key} -> ${colorKey} (${currentColorSet[colorKey]})`);
+     }
    }
  });
-  document.getElementById('timeFormatSelect').addEventListener('change', (e) => {
-   timeFormat = e.target.value;
-   console.log(`DEBUG: timeFormatSelect changed. New timeFormat: ${timeFormat}`); // ADDED
-   updateAllTaskDisplays();
-   saveSettings();
- });
 
+// Background task management functions
+async function initializeBackgroundTasks() {
+ try {
+   // Check if we're running on mobile with Capacitor
+   if (window.Capacitor && window.Capacitor.Plugins) {
+     console.log('[Background] Initializing background task support...');
+     
+     // Initialize background mode if available
+     if (window.Capacitor.Plugins.BackgroundMode) {
+       const { BackgroundMode } = window.Capacitor.Plugins;
+       
+       // Configure background mode
+       await BackgroundMode.configure({
+         title: 'Timer Running',
+         text: 'Your timer is still running in the background',
+         subText: 'Tap to return to the app',
+         bigText: false,
+         resume: true,
+         silent: false,
+         hidden: false,
+         color: 'ffffff',
+         icon: 'icon',
+         channelName: 'Timer Background',
+         channelDescription: 'Background timer notifications',
+         allowClose: false,
+         closeIcon: 'power',
+         closeTitle: 'Close',
+         showWhen: false,
+       });
+       
+       console.log('[Background] Background mode configured');
+     }
+     
+     // Listen for app state changes
+     document.addEventListener('visibilitychange', handleVisibilityChange);
+     
+     // Listen for pause/resume events
+     if (window.Capacitor.Plugins.App) {
+       const { App } = window.Capacitor.Plugins;
+       App.addListener('appStateChange', handleAppStateChange);
+     }
+     
+   } else {
+     console.log('[Background] Running in browser/desktop mode - background tasks not available');
+   }
+ } catch (error) {
+   console.error('[Background] Error initializing background tasks:', error);
+ }
+}
 
+async function enableBackgroundMode() {
+ try {
+   if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundMode) {
+     const { BackgroundMode } = window.Capacitor.Plugins;
+     await BackgroundMode.enable();
+     isBackgroundModeEnabled = true;
+     console.log('[Background] Background mode enabled');
+   }
+ } catch (error) {
+   console.error('[Background] Error enabling background mode:', error);
+ }
+}
+
+async function disableBackgroundMode() {
+ try {
+   if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundMode) {
+     const { BackgroundMode } = window.Capacitor.Plugins;
+     await BackgroundMode.disable();
+     isBackgroundModeEnabled = false;
+     console.log('[Background] Background mode disabled');
+   }
+ } catch (error) {
+   console.error('[Background] Error disabling background mode:', error);
+ }
+}
+
+async function startBackgroundTask() {
+ try {
+   if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundTask) {
+     const { BackgroundTask } = window.Capacitor.Plugins;
+     
+     const taskId = await BackgroundTask.beforeExit(async () => {
+       console.log('[Background] Background task started');
+       
+       // Keep the task alive for a longer period
+       setTimeout(async () => {
+         await BackgroundTask.finish({ taskId });
+         console.log('[Background] Background task finished');
+       }, 30000); // 30 seconds
+     });
+     
+     backgroundTaskId = taskId;
+     console.log('[Background] Background task registered with ID:', taskId);
+     return taskId;
+   }
+ } catch (error) {
+   console.error('[Background] Error starting background task:', error);
+ }
+ return null;
+}
+
+async function finishBackgroundTask() {
+ try {
+   if (backgroundTaskId && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundTask) {
+     const { BackgroundTask } = window.Capacitor.Plugins;
+     await BackgroundTask.finish({ taskId: backgroundTaskId });
+     console.log('[Background] Background task finished:', backgroundTaskId);
+     backgroundTaskId = null;
+   }
+ } catch (error) {
+   console.error('[Background] Error finishing background task:', error);
+ }
+}
+
+function handleVisibilityChange() {
+ if (document.hidden) {
+   console.log('[Background] App went to background');
+   handleAppGoingToBackground();
+ } else {
+   console.log('[Background] App came to foreground');
+   handleAppComingToForeground();
+ }
+}
+
+function handleAppStateChange(state) {
+ console.log('[Background] App state changed:', state);
+ if (state.isActive) {
+   handleAppComingToForeground();
+ } else {
+   handleAppGoingToBackground();
+ }
+}
+
+async function handleAppGoingToBackground() {
+  // Check if background mode is enabled in settings
+  const backgroundToggle = document.getElementById('backgroundModeToggle');
+  const isBackgroundModeAllowed = backgroundToggle?.checked || false;
+  
+  if (!isBackgroundModeAllowed) {
+    console.log('[Background] Background mode disabled in settings');
+    return;
+  }
+  
+  // Check if there are any active timers
+  const activeTasks = [...taskContainer.children].filter(task =>
+    task.dataset.finished !== 'true'
+  );
+  
+  if (activeTasks.length > 0) {
+    console.log('[Background] Active timers detected, enabling background mode');
+    await enableBackgroundMode();
+    await startBackgroundTask();
+    
+    // Store timer states in local storage for persistence
+    saveTimerStates();
+  }
+}
+
+async function handleAppComingToForeground() {
+ console.log('[Background] App returned to foreground');
  
+ // Restore timer states if needed
+ restoreTimerStates();
+ 
+ // Disable background mode when app is active
+ if (isBackgroundModeEnabled) {
+   await disableBackgroundMode();
+ }
+ 
+ // Finish any active background tasks
+ await finishBackgroundTask();
+}
 
+function saveTimerStates() {
+ try {
+   const timerStates = [];
+   const activeTasks = [...taskContainer.children].filter(task =>
+     task.dataset.finished !== 'true'
+   );
+   
+   activeTasks.forEach(task => {
+     const endTime = task.dataset.endTime;
+     const taskName = task.dataset.taskName;
+     const notes = task.dataset.notes || '';
+     const colorKey = task.dataset.colorKey;
+     const customColor = task.dataset.customColor;
+     
+     if (endTime) {
+       timerStates.push({
+         endTime: parseInt(endTime),
+         taskName,
+         notes,
+         colorKey,
+         customColor,
+         timestamp: Date.now()
+       });
+     }
+   });
+   
+   localStorage.setItem('backgroundTimerStates', JSON.stringify(timerStates));
+   console.log('[Background] Timer states saved:', timerStates.length);
+ } catch (error) {
+   console.error('[Background] Error saving timer states:', error);
+ }
+}
+
+function restoreTimerStates() {
+ try {
+   const savedStates = localStorage.getItem('backgroundTimerStates');
+   if (!savedStates) return;
+   
+   const timerStates = JSON.parse(savedStates);
+   const currentTime = Date.now();
+   
+   console.log('[Background] Restoring timer states:', timerStates.length);
+   
+   // Clear existing tasks first
+   taskContainer.innerHTML = '';
+   
+   timerStates.forEach(state => {
+     const timeLeft = state.endTime - currentTime;
+     
+     if (timeLeft > 0) {
+       // Timer is still running
+       const endTime = new Date(state.endTime);
+       const totalSeconds = Math.ceil(timeLeft / 1000);
+       
+       addTask(
+         state.taskName,
+         totalSeconds,
+         endTime,
+         state.notes,
+         state.customColor || currentColorSet[state.colorKey],
+         state.colorKey
+       );
+     } else {
+       // Timer has finished while in background
+       console.log('[Background] Timer finished while in background:', state.taskName);
+       // You could show a notification here or add to finished tasks
+     }
+   });
+   
+   // Clear saved states
+   localStorage.removeItem('backgroundTimerStates');
+   
+   // Update UI
+   updateTaskContainerVisibility();
+   
+ } catch (error) {
+   console.error('[Background] Error restoring timer states:', error);
+ }
+}
+
+function updateTaskContainerVisibility() {
+  if (taskContainer.children.length === 0) {
+    bigAddButton.style.display = 'block';
+    bottomControls.style.display = 'none';
+  } else {
+    bigAddButton.style.display = 'none';
+    bottomControls.style.display = 'flex';
+  }
+}
+
+// Desktop notification for timer completion
+async function showTimerCompletionNotification(taskName, notes) {
+  try {
+    // Check if notifications are enabled in settings
+    const notificationsToggle = document.getElementById('notificationsToggle');
+    const areNotificationsEnabled = notificationsToggle?.checked || false;
+    
+    if (!areNotificationsEnabled) {
+      console.log('[Notification] Notifications disabled in settings');
+      return;
+    }
+    
+    console.log('[Notification] Showing timer completion notification for:', taskName);
+    
+    // Check if we're running in Electron (desktop)
+    if (window.electronAPI && window.electronAPI.showNotification) {
+      console.log('[Notification] Using Electron desktop notification');
+      
+      const notificationOptions = {
+        title: 'Termer - Timer Finished!',
+        body: notes ? `${taskName}\n${notes}` : taskName
+      };
+      
+      const result = await window.electronAPI.showNotification(notificationOptions);
+      if (result.success) {
+        console.log('[Notification] Desktop notification shown successfully');
+      } else {
+        console.error('[Notification] Failed to show desktop notification:', result.error);
+      }
+      
+    } else if (window.Capacitor && window.Capacitor.Plugins) {
+      // Mobile notification (if supported by plugins)
+      console.log('[Notification] Running on mobile, checking for notification support');
+      
+      // For mobile, we could use local notifications plugin if available
+      // For now, we'll just log it
+      console.log('[Notification] Mobile notification support not implemented yet');
+      
+    } else if ('Notification' in window) {
+      // Web browser notification
+      console.log('[Notification] Using web browser notification');
+      
+      if (Notification.permission === 'granted') {
+        const notification = new Notification('Timer Finished!', {
+          body: notes ? `${taskName}\n${notes}` : taskName,
+          icon: 'icon.png',
+          requireInteraction: true
+        });
+        
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+        
+        console.log('[Notification] Web notification shown');
+      } else if (Notification.permission !== 'denied') {
+        // Request permission
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          // Retry showing notification
+          await showTimerCompletionNotification(taskName, notes);
+        }
+      }
+    } else {
+      console.log('[Notification] No notification support available');
+    }
+    
+  } catch (error) {
+    console.error('[Notification] Error showing notification:', error);
+  }
+}
+
+ // Initialize the app
+const taskContainer = document.getElementById('task-container');
+const bigAddButton = document.getElementById('bigAddButton');
+const bottomControls = document.getElementById('bottomControls');
+const timeInput = document.getElementById('timeInput'); // Already declared, but good for reference
+
+// Add this near your initialization code
+const resizeObserver = new ResizeObserver(entries => {
+  updateAllTaskDisplays();
+});
+
+// Observe the task container
+if (taskContainer) {
+  resizeObserver.observe(taskContainer);
+}
+
+// Load settings when page loads
+window.addEventListener('load', async () => { // Make the callback async
+  console.log('[Renderer Process] Window load event: electronAPI object:', window.electronAPI);
+  initializeEventListeners();
+  await loadSettings(); // Await the completion of loadSettings
+  updateFormatPreview();
+
+  // Initialize background task support
+  await initializeBackgroundTasks();
+
+  // Initialize widget support
+  await initializeWidget();
+
+  // Ensure scrollbars are hidden
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
+  // Initial check for task list to show/hide big button
+  if (taskContainer.children.length === 0) {
+    bigAddButton.style.display = 'block';
+    bottomControls.style.display = 'none';
+  } else {
+    bigAddButton.style.display = 'none';
+    bottomControls.style.display = 'flex';
+  }
+});
+
+document.getElementById('timeFormatSelect').addEventListener('change', async (e) => {
+  timeFormat = e.target.value;
+  console.log(`DEBUG: timeFormatSelect changed. New timeFormat: ${timeFormat}`); // ADDED
+  updateAllTaskDisplays();
+  await saveSettings();
+// Widget functionality
+let TimerWidget = null;
+
+// Initialize widget support
+async function initializeWidget() {
+  try {
+    if (window.Capacitor && window.Capacitor.Plugins) {
+      // Check if we're on mobile and widget is supported
+      TimerWidget = window.Capacitor.Plugins.TimerWidget;
+      if (TimerWidget) {
+        const result = await TimerWidget.isWidgetSupported();
+        if (result.supported) {
+          console.log('[Widget] Widget support initialized');
+          // Update widget with current timer data
+          await updateWidget();
+        }
+      }
+    }
+  } catch (error) {
+    console.log('[Widget] Widget not supported on this platform:', error);
+  }
+}
+
+// Update widget with current timer data
+async function updateWidget() {
+  if (!TimerWidget) return;
+  
+  try {
+    // Collect active timer data
+    const activeTimers = [];
+    const tasks = document.querySelectorAll('.task');
+    
+    tasks.forEach(task => {
+      const taskNameElement = task.querySelector('.task-name');
+      const timeLeftElement = task.querySelector('.time-left');
+      const endTimeStr = task.dataset.endTime;
+      
+      if (taskNameElement && timeLeftElement && endTimeStr) {
+        const endTime = parseInt(endTimeStr);
+        const currentTime = Date.now();
+        
+        // Only include active timers (not finished)
+        if (endTime > currentTime) {
+          activeTimers.push({
+            name: taskNameElement.textContent.trim(),
+            endTime: endTime,
+            timeLeft: endTime - currentTime
+          });
+        }
+      }
+    });
+    
+    // Sort by time remaining (shortest first)
+    activeTimers.sort((a, b) => a.timeLeft - b.timeLeft);
+    
+    // Update widget
+    await TimerWidget.updateWidget({
+      timerData: JSON.stringify(activeTimers)
+    });
+    
+    console.log('[Widget] Updated with', activeTimers.length, 'active timers');
+  } catch (error) {
+    console.error('[Widget] Error updating widget:', error);
+  }
+}
+
+// Call updateWidget whenever timers change
+const originalAddTask = addTask;
+addTask = function(...args) {
+  const result = originalAddTask.apply(this, args);
+  setTimeout(updateWidget, 100); // Small delay to ensure DOM is updated
+  return result;
+};
+
+// Update widget when tasks are cleared
+const originalClearFinishedTasks = clearFinishedTasks;
+clearFinishedTasks = function() {
+  originalClearFinishedTasks.apply(this);
+  setTimeout(updateWidget, 100);
+};
+});

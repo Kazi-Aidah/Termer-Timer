@@ -17,7 +17,7 @@
        <div class="settings-title">APPEARANCE</div>
        <div class="settings-row">
          <span>Theme:</span>
-         <select id="themeSelect" onchange="changeTheme()">
+         <select id="themeSelect" onchange="changeTheme().catch(console.error)">
            <option value="dark">Dark Mode</option>
            <option value="light">Light Mode</option>
            <option value="custom">Custom Mode</option>
@@ -26,11 +26,11 @@
        <div id="customThemeOptions" style="display: none; margin-top: 0.5rem;">
          <div style="margin-bottom: 0.5rem;">
            <span>Background:</span>
-           <input type="color" id="customBgColor" value="#000000" onchange="updateCustomTheme()">
+           <input type="color" id="customBgColor" value="#000000" onchange="updateCustomTheme().catch(console.error)">
          </div>
          <div style="margin-bottom: 0.5rem;">
            <span>Text:</span>
-           <input type="color" id="customTextColor" value="#ffffff" onchange="updateCustomTheme()">
+           <input type="color" id="customTextColor" value="#ffffff" onchange="updateCustomTheme().catch(console.error)">
          </div>
          <div>
          </div>
@@ -48,38 +48,40 @@
        </div>
      </div>
      <hr>
-     <div class="settings-section">
-       <div class="settings-title">SOUND</div>
-       <div class="sound-upload">
-         <span>Timer End Sound:</span>
-         <span id="currentSound">success.mp3</span>
-         <label class="sound-upload-btn">
-           Change
-           <input type="file" id="soundUpload" accept=".mp3" style="display: none;" onchange="handleSoundUpload()">
-         </label>
-       </div>
-     </div>
+      <div class="settings-section">
+        <div class="settings-title">SOUND</div>
+        <div class="sound-upload">
+          <div class="sound-upload-row">
+            <span>Timer End Sound:</span>
+            <label class="sound-upload-btn">
+              CHANGE
+              <input type="file" id="soundUpload" accept=".mp3" style="display: none;" onchange="handleSoundUpload()">
+            </label>
+          </div>
+          <div id="currentSound" class="currentsound">success.mp3</div>
+        </div>
+      </div>
      <hr>
      <div class="settings-section">
        <div class="settings-title">REPEATERS</div>
        <div class="settings-row">
-         <span>[###...]</span>
+         <span>[######.....]</span>
          <label class="switch">
-           <input type="checkbox" id="repeaterStyleHash" onchange="updateRepeaterStyle(this, 'hash')">
+           <input type="checkbox" id="repeaterStyleHash" onchange="updateRepeaterStyle(this, 'hash').catch(console.error)">
            <span class="slider"></span>
          </label>
        </div>
        <div class="settings-row">
-         <span>[███...]</span>
+         <span>[██████.....]</span>
          <label class="switch">
-           <input type="checkbox" id="repeaterStyleBlock" onchange="updateRepeaterStyle(this, 'block')">
+           <input type="checkbox" id="repeaterStyleBlock" onchange="updateRepeaterStyle(this, 'block').catch(console.error)">
            <span class="slider"></span>
          </label>
        </div>
        <div class="settings-row">
-         <span>Custom</span>
+         <span>Custom <span id="customRepeaterPreview"></span></span>
          <label class="switch">
-           <input type="checkbox" id="repeaterStyleCustomToggle" onchange="toggleCustomRepeaterSection()">
+           <input type="checkbox" id="repeaterStyleCustomToggle" onchange="toggleCustomRepeaterSection().catch(console.error)">
            <span class="slider"></span>
          </label>
        </div>
@@ -90,14 +92,11 @@
          <div id="customRepeaterInputBoxes" style="display: none;">
            <div style="margin-bottom: 0.5rem;">
              <span>Filled:</span>
-             <input type="text" id="customRepeaterFilled" maxlength="3" style="width: 50px;" oninput="updateCustomRepeaterPreview()">
+             <input type="text" id="customRepeaterFilled" maxlength="3" style="width: 50px;" oninput="updateCustomRepeaterPreview().catch(console.error)">
            </div>
            <div>
              <span>Unfilled:</span>
-             <input type="text" id="customRepeaterUnfilled" maxlength="3" style="width: 50px;" oninput="updateCustomRepeaterPreview()">
-           </div>
-           <div style="margin-top: 0.5rem;">
-             Preview: <span id="customRepeaterPreview"></span>
+             <input type="text" id="customRepeaterUnfilled" maxlength="3" style="width: 50px;" oninput="updateCustomRepeaterPreview().catch(console.error)">
            </div>
          </div>
        </div>
@@ -108,7 +107,7 @@
        <div class="settings-row">
          <span>Simplified View:</span>
          <label class="switch">
-           <input type="checkbox" id="simplifiedViewToggle" onchange="toggleSimplifiedView()">
+           <input type="checkbox" id="simplifiedViewToggle" onchange="toggleSimplifiedView().catch(console.error)">
            <span class="slider"></span>
          </label>
        </div>
@@ -137,10 +136,34 @@
        </div>
        <div style="margin-top: 1rem;">
          <div>Box Radius:</div>
-         <input type="range" id="boxRadiusSlider" min="0" max="20" value="0" oninput="updateBoxRadius()">
+         <input type="range" id="boxRadiusSlider" min="0" max="20" value="0" oninput="updateBoxRadius().catch(console.error)">
        </div>
        <div class="format-preview" style="margin-top: 0.5rem;">
          <span id="boxRadiusValue">0px</span>
+       </div>
+     </div>
+     <hr>
+     <div class="settings-section">
+       <div class="settings-title">BACKGROUND MODE</div>
+       <div class="settings-row">
+         <span>Run in Background:</span>
+         <label class="switch">
+           <input type="checkbox" id="backgroundModeToggle" onchange="toggleBackgroundModeSetting().catch(console.error)">
+           <span class="slider"></span>
+         </label>
+       </div>
+       <div style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">
+         Allows timers to continue running when the app is minimized or closed (mobile only)
+       </div>
+       <div class="settings-row" style="margin-top: 1rem;">
+         <span>Desktop Notifications:</span>
+         <label class="switch">
+           <input type="checkbox" id="notificationsToggle" onchange="toggleNotificationsSetting().catch(console.error)">
+           <span class="slider"></span>
+         </label>
+       </div>
+       <div style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">
+         Show system notifications when timers finish (desktop only)
        </div>
      </div>
      <hr>
@@ -190,6 +213,18 @@
 
  <audio id="successSound" src="success.mp3"></audio>
 
+ <!-- Capacitor Core (for mobile support) -->
+ <script type="module">
+   import { Capacitor } from '@capacitor/core';
+   import { Preferences } from '@capacitor/preferences';
+   
+   // Make Capacitor available globally for the main script
+   window.Capacitor = Capacitor;
+   if (!window.Capacitor.Plugins) {
+     window.Capacitor.Plugins = {};
+   }
+   window.Capacitor.Plugins.Preferences = Preferences;
+ </script>
 
  <script src="script.js"></script>
 </body>

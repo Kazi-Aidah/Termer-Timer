@@ -482,23 +482,40 @@ body.custom-mode .color-preset:hover::after {
 }
 .sound-upload {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.3rem;
 }
+
+.sound-upload-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.currentsound {
+  margin-top: 0;
+  font-size: 0.9rem;
+  color: var(--custom-text);
+  opacity: 0.8;
+}
+
 .sound-upload-btn {
   padding: 0.2rem 0.5rem;
-  border: 1px solid white;
+  border: 1px solid var(--custom-text);
   cursor: pointer;
   border-radius: var(--task-radius, 0px);
+  width: 69px;
+  text-align: center;
 }
+
 body.light-mode .sound-upload-btn {
   border: 1px solid #333;
 }
+
 body.custom-mode .sound-upload-btn {
   border: 1px solid var(--custom-text, white);
 }
 
-/* Input placeholder colors */
 body.light-mode .input::placeholder {
   color: #999;
 }
@@ -509,6 +526,10 @@ body.custom-mode .input::placeholder {
 input:focus, textarea:focus {
   outline: 2px solid var(--accent-color, #79cdff);
   background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.btn-text {
+  text-align: center;
 }
 
 /* For simplified view alignment */
@@ -555,14 +576,14 @@ input:focus, textarea:focus {
 .switch {
   position: relative;
   display: inline-block;
-  width: 90px; /* Increased width */
+  width: 90px;
   height: 28px;
   background-color: transparent; 
   border: 1px solid var(--custom-text); 
   font-family: 'JetBrains Mono', monospace;
   cursor: pointer;
   border-radius: var(--task-radius, 4px); 
-  box-sizing: border-box; /* Ensure padding/border don't add to width/height */
+  box-sizing: border-box;
 }
 
 .switch input {
@@ -736,4 +757,84 @@ input[type="range"]:focus::-moz-range-thumb {
 .custom-color-input-wrapper input[type="color"]::-moz-color-swatch {
   border: none;
   border-radius: 3px;
+}
+
+/* meow */
+/* Style for custom repeater input boxes */
+#customRepeaterFilled,
+#customRepeaterUnfilled {
+  background-color: transparent;
+  border: 1px solid var(--custom-text);
+  color: var(--custom-text);
+  outline: none;
+  padding: 4px;
+  text-align: center;
+}
+
+/* Focus state for better visibility */
+#customRepeaterFilled:focus,
+#customRepeaterUnfilled:focus {
+  border-color: var(--custom-text);
+  box-shadow: 0 0 0 1px var(--custom-text);
+}
+
+/* Remove default input styling */
+#customRepeaterFilled::-webkit-input-placeholder,
+#customRepeaterUnfilled::-webkit-input-placeholder {
+  color: var(--custom-text);
+  opacity: 0.5;
+}
+
+#customRepeaterFilled::-moz-placeholder,
+#customRepeaterUnfilled::-moz-placeholder {
+  color: var(--custom-text);
+  opacity: 0.5;
+}
+
+#customRepeaterFilled:-ms-input-placeholder,
+#customRepeaterUnfilled:-ms-input-placeholder {
+  color: var(--custom-text);
+  opacity: 0.5;
+}
+
+#customRepeaterFilled:-moz-placeholder,
+#customRepeaterUnfilled:-moz-placeholder {
+  color: var(--custom-text);
+  opacity: 0.5;
+}
+
+/* colour input */
+input[type="color"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  background-color: transparent;
+  border: 2px solid var(--custom-text);
+  border-radius: var(--task-radius, 0px);
+  padding: 0;
+  cursor: pointer;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: calc(var(--task-radius, 0px) - 2px);
+}
+
+input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: calc(var(--task-radius, 0px) - 2px);
+}
+
+.settings-panel input[type="color"] {
+  width: 40px;
+  height: 20px;
+  margin-left: 10px;
+}
+
+.task:not(.simplified) {
+  text-align: center;
+  white-space: pre;
+  padding: 1rem;
 }
