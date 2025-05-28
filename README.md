@@ -34,4 +34,4 @@ I was a little confused on why my debug.apk was so heavy.
 
 Then I found out my Windows and Linux files were also getting included in the apk and finally got it fixed, yay!
 ![Image](https://github.com/user-attachments/assets/6acb73f9-5416-4894-9b93-21a6a7e741ec)
-
+From 400mb to 3mb, wow.
