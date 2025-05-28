@@ -8,6 +8,27 @@ I started this project on 27th May, 2025 as something for myself.
 We have Dark Mode, Light Mode, & Custom Theming!
 ![Image](https://github.com/user-attachments/assets/184a16a7-4df8-474f-a198-7d3cab03ede2)
 
+# KEYS
+Space = Opens tasks adding panel
+Input TIME then press ENTER Key -> Moves to TASKNAME input
+Press ENTER Key again to start the task.
+When in the Task Adding Panel, you can press these shortcuts to select colours :D
+alt + r = red
+alt + o = orange
+alt + y = yellow
+alt + g = green
+alt + c = cyan
+alt + s = sky
+alt + b = blue
+alt + v = purple (v for violet)
+alt + m = magenta
+alt + p = pink
+alt + w = brown
+alt + 0 = white
+alt + a = gray
+alt + 1 = black
+
+
 ## VIEWING MODES
 REGULAR VIEW:
 ![Image](https://github.com/user-attachments/assets/e0353903-b2e8-4d3f-8fc4-f37edbbd0c9a)
