@@ -1,6 +1,8 @@
 // Background task variables
 let backgroundTaskId = null;
 let isBackgroundModeEnabled = false;
+let notificationUpdateInterval = null;
+let activeNotifications = {};
 
 const darkModeColors = {
    red: '#ff7979', orange: '#ffb479', yellow: '#ffd979', green: '#c4ff79', cyan: '#79ffc9',
@@ -558,7 +560,7 @@ function removeSettingSeparators() {
        document.getElementById('customRepeaterUnfilled').value = customRepeaterUnfilled;
        const customPreview = document.getElementById('customRepeaterPreview');
        if (customPreview) {
-           customPreview.textContent = generateRepeaterString(0.5, customRepeaterFilled, customRepeaterUnfilled); // Show a 50% preview
+           customPreview.textContent = generateRepeaterString(0.5, customRepeaterFilled, customRepeaterUnfilled, null, 6); // Show a 50% preview with 6 chars (3+3)
        }
      }
      updateAllTaskDisplays(); // Update tasks with loaded repeater style
@@ -659,7 +661,7 @@ function removeSettingSeparators() {
         };
         reader.readAsDataURL(file);
       } else {
-        alert('Please upload an audio file.');
+        console.warn('Please upload an audio file.');
       }
     }
   }
@@ -674,7 +676,7 @@ function removeSettingSeparators() {
      updateSettingsColorPicker();
      await saveSettings();
    } else if (newColor) {
-     alert('Please enter a valid hex color (e.g., #ff0000).');
+     console.warn('Please enter a valid hex color (e.g., #ff0000).');
    }
  }
   // Toggle simplified view
@@ -731,6 +733,42 @@ function removeSettingSeparators() {
      }
    }
  }
+
+ // New function to update ongoing notifications
+async function updateActiveNotifications() {
+  const activeTasks = [...taskContainer.children].filter(
+    task => task.dataset.finished !== 'true'
+  );
+
+  if (window.Capacitor?.Plugins?.LocalNotifications) {
+    const { LocalNotifications } = window.Capacitor.Plugins;
+    
+    // Cancel any existing notifications
+    await LocalNotifications.cancel();
+    
+    // Create new notifications for active tasks
+    const notifications = activeTasks.map(task => {
+      const now = new Date();
+      const endTime = new Date(parseInt(task.dataset.endTime));
+      const timeLeft = Math.max(0, Math.floor((endTime - now) / 1000));
+      
+      return {
+        title: task.dataset.taskName,
+        body: `Time left: ${formatTimeLeft(timeLeft)}`,
+        id: task.dataset.notificationId || Date.now(),
+        schedule: { at: new Date(now.getTime() + 1000) }, // Show immediately
+        ongoing: true, // Makes notification sticky
+        autoCancel: false,
+        sound: null
+      };
+    });
+
+    if (notifications.length > 0) {
+      await LocalNotifications.schedule({ notifications });
+    }
+  }
+}
+
   // Update format preview
   function updateFormatPreview() {
     const preview = document.getElementById('formatPreview');
@@ -895,13 +933,17 @@ async function updateBoxRadius() {
 }
 
  // --- REPEATER FUNCTIONS ---
-function generateRepeaterString(progressRatio, filledChar, unfilledChar, element = null) {
+function generateRepeaterString(progressRatio, filledChar, unfilledChar, element = null, customLength = null) {
   const baseLength = 10; // Minimum number of characters
   let calculatedLength = baseLength;
   
-  if (element) {
+  // If custom length is provided, use it (for previews)
+  if (customLength !== null) {
+    calculatedLength = customLength;
+  } else if (element) {
+    // Calculate length based on element width
     const taskWidth = element.offsetWidth;
-    const avgCharWidth = 10; // More conservative width estimate
+    const avgCharWidth = 10; // Conservative width estimate
     const paddingBuffer = 60; // Adjust to avoid overflow
     calculatedLength = Math.max(baseLength, Math.floor((taskWidth - paddingBuffer) / avgCharWidth));
   }
@@ -1147,8 +1189,8 @@ function showCustomRepeaterInputs() {
    });
  }
   // Add a new task
- function addTask(taskName, totalSec, endTime, notes, color, colorKey = null) {
-   const div = document.createElement('div');
+function addTask(taskName, totalSec, endTime, notes, color, colorKey = null) {
+  const div = document.createElement('div');
    div.className = 'task' + (simplifiedView ? ' simplified' : '');
    div.style.borderColor = color;
    div.style.color = color;
@@ -1253,21 +1295,36 @@ function showCustomRepeaterInputs() {
         const now = new Date();
        const timeLeft = Math.max(0, Math.floor((endTime - now) / 1000));
        if (timeLeft <= 0) {
-         clearInterval(updateInterval);
+         
+         try {
+           clearInterval(updateInterval);
+         } catch (e) {
+           console.error('clearInterval failed:', e.message);
+         }
+         
          try {
            const audio = document.getElementById('successSound');
            audio.currentTime = 0; // Reset to start
            audio.play().catch(e => console.log('Audio play failed:', e));
          } catch (e) {
-           console.log('Audio error:', e);
+           console.error('Audio error:', e.message);
          }
          
-         // Show desktop notification
-         showTimerCompletionNotification(taskName, notes);
+         try {
+           // Show desktop notification
+           showTimerCompletionNotification(taskName, notes);
+         } catch (e) {
+           console.error('Notification error:', e.message);
+         }
          
-         // Update widget when timer finishes
-         setTimeout(updateWidget, 100);
+         try {
+           // Update widget when timer finishes
+           setTimeout(updateWidget, 100);
+         } catch (e) {
+           console.error('setTimeout updateWidget error:', e.message);
+         }
          
+         // Mark task as finished
          div.dataset.finished = 'true';
          div.style.opacity = '0.6';
        }
@@ -1465,15 +1522,35 @@ function showCustomRepeaterInputs() {
  }
   // Clear finished tasks
  function clearFinishedTasks() {
+   const taskContainer = document.getElementById('task-container');
+   const bigAddButton = document.getElementById('bigAddButton');
+   const bottomControls = document.getElementById('bottomControls');
+
+   if (!taskContainer) {
+     console.error('taskContainer not found in clearFinishedTasks');
+     return;
+   }
+
+   // Remove all finished tasks
    [...taskContainer.children].forEach(div => {
-     if (div.dataset.finished === 'true') div.remove();
+     if (div.dataset.finished === 'true') {
+       div.remove();
+     }
    });
   
-   // Show big button if no tasks left
-   if (taskContainer.children.length === 0) {
-     bigAddButton.style.display = 'block';
-     bottomControls.style.display = 'none';
+   // Update UI visibility based on remaining tasks
+   if (bigAddButton && bottomControls) {
+     if (taskContainer.children.length === 0) {
+       bigAddButton.style.display = 'block';
+       bottomControls.style.display = 'none';
+     } else {
+       bigAddButton.style.display = 'none';
+       bottomControls.style.display = 'flex';
+     }
    }
+   
+   // Update task container visibility
+   updateTaskContainerVisibility();
  }
   // Close panels when clicking outside
  document.addEventListener('click', (e) => {
@@ -1677,43 +1754,49 @@ function handleAppStateChange(state) {
 }
 
 async function handleAppGoingToBackground() {
-  // Check if background mode is enabled in settings
   const backgroundToggle = document.getElementById('backgroundModeToggle');
   const isBackgroundModeAllowed = backgroundToggle?.checked || false;
   
-  if (!isBackgroundModeAllowed) {
-    console.log('[Background] Background mode disabled in settings');
-    return;
-  }
-  
-  // Check if there are any active timers
-  const activeTasks = [...taskContainer.children].filter(task =>
-    task.dataset.finished !== 'true'
+  if (!isBackgroundModeAllowed) return;
+
+  const activeTasks = [...taskContainer.children].filter(
+    task => task.dataset.finished !== 'true'
   );
-  
+
   if (activeTasks.length > 0) {
-    console.log('[Background] Active timers detected, enabling background mode');
     await enableBackgroundMode();
     await startBackgroundTask();
-    
-    // Store timer states in local storage for persistence
     saveTimerStates();
+    
+    // Start updating notifications periodically
+    notificationUpdateInterval = setInterval(updateActiveNotifications, 10000); // Update every 10 seconds
+    
+    // Initial notification update
+    await updateActiveNotifications();
   }
 }
 
 async function handleAppComingToForeground() {
- console.log('[Background] App returned to foreground');
- 
- // Restore timer states if needed
- restoreTimerStates();
- 
- // Disable background mode when app is active
- if (isBackgroundModeEnabled) {
-   await disableBackgroundMode();
- }
- 
- // Finish any active background tasks
- await finishBackgroundTask();
+  console.log('[Background] App returned to foreground');
+  
+  // Stop updating notifications
+  if (notificationUpdateInterval) {
+    clearInterval(notificationUpdateInterval);
+    notificationUpdateInterval = null;
+  }
+  
+  // Clear any active notifications
+  if (window.Capacitor?.Plugins?.LocalNotifications) {
+    await window.Capacitor.Plugins.LocalNotifications.cancel();
+  }
+  
+  restoreTimerStates();
+  
+  if (isBackgroundModeEnabled) {
+    await disableBackgroundMode();
+  }
+  
+  await finishBackgroundTask();
 }
 
 function saveTimerStates() {
@@ -1809,74 +1892,84 @@ function updateTaskContainerVisibility() {
 // Desktop notification for timer completion
 async function showTimerCompletionNotification(taskName, notes) {
   try {
-    // Check if notifications are enabled in settings
     const notificationsToggle = document.getElementById('notificationsToggle');
     const areNotificationsEnabled = notificationsToggle?.checked || false;
-    
+
     if (!areNotificationsEnabled) {
-      console.log('[Notification] Notifications disabled in settings');
+      console.log('[Notification] Notifications are disabled in settings');
       return;
     }
-    
-    console.log('[Notification] Showing timer completion notification for:', taskName);
-    
-    // Check if we're running in Electron (desktop)
-    if (window.electronAPI && window.electronAPI.showNotification) {
-      console.log('[Notification] Using Electron desktop notification');
-      
-      const notificationOptions = {
+
+    const message = notes ? `${taskName}\n${notes}` : taskName;
+    console.log('[Notification] Attempting to show notification for:', taskName);
+
+    // Mobile (Capacitor)
+    if (window.Capacitor?.Plugins?.LocalNotifications) {
+      const { LocalNotifications } = window.Capacitor.Plugins;
+      await LocalNotifications.schedule({
+        notifications: [{
+          title: 'Timer Finished!',
+          body: message,
+          id: Date.now(),
+          schedule: { at: new Date() },
+          sound: 'default',
+          extra: { taskName }
+        }]
+      });
+      console.log('[Notification] Mobile notification scheduled');
+    }
+
+    // Desktop (Electron)
+    else if (window.electronAPI?.showNotification) {
+      const result = await window.electronAPI.showNotification({
         title: 'Termer - Timer Finished!',
-        body: notes ? `${taskName}\n${notes}` : taskName
-      };
-      
-      const result = await window.electronAPI.showNotification(notificationOptions);
-      if (result.success) {
+        body: message
+      });
+
+      if (result?.success) {
         console.log('[Notification] Desktop notification shown successfully');
       } else {
-        console.error('[Notification] Failed to show desktop notification:', result.error);
+        console.error('[Notification] Failed to show desktop notification:', result?.error);
       }
-      
-    } else if (window.Capacitor && window.Capacitor.Plugins) {
-      // Mobile notification (if supported by plugins)
-      console.log('[Notification] Running on mobile, checking for notification support');
-      
-      // For mobile, we could use local notifications plugin if available
-      // For now, we'll just log it
-      console.log('[Notification] Mobile notification support not implemented yet');
-      
-    } else if ('Notification' in window) {
-      // Web browser notification
-      console.log('[Notification] Using web browser notification');
-      
+    }
+
+    // Web Browser
+    else if ('Notification' in window) {
       if (Notification.permission === 'granted') {
         const notification = new Notification('Timer Finished!', {
-          body: notes ? `${taskName}\n${notes}` : taskName,
+          body: message,
           icon: 'icon.png',
           requireInteraction: true
         });
-        
+
         notification.onclick = () => {
           window.focus();
           notification.close();
         };
-        
+
         console.log('[Notification] Web notification shown');
       } else if (Notification.permission !== 'denied') {
-        // Request permission
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-          // Retry showing notification
-          await showTimerCompletionNotification(taskName, notes);
+          await showTimerCompletionNotification(taskName, notes); // Retry after permission granted
+        } else {
+          console.warn('[Notification] Permission denied for browser notifications');
         }
+      } else {
+        console.warn('[Notification] Browser notifications not permitted');
       }
-    } else {
-      console.log('[Notification] No notification support available');
     }
-    
+
+    // No Supported Method
+    else {
+      console.warn('[Notification] No supported notification mechanism found');
+    }
+
   } catch (error) {
     console.error('[Notification] Error showing notification:', error);
   }
 }
+
 
  // Initialize the app
 const taskContainer = document.getElementById('task-container');
@@ -1954,39 +2047,84 @@ async function updateWidget() {
   if (!TimerWidget) return;
   
   try {
-    // Collect active timer data
-    const activeTimers = [];
+    // Collect both active and ended timer data
+    const allTimers = [];
     const tasks = document.querySelectorAll('.task');
     
     tasks.forEach(task => {
       const taskNameElement = task.querySelector('.task-name');
       const timeLeftElement = task.querySelector('.time-left');
       const endTimeStr = task.dataset.endTime;
+      const notesElement = task.querySelector('.task-notes');
       
       if (taskNameElement && timeLeftElement && endTimeStr) {
         const endTime = parseInt(endTimeStr);
         const currentTime = Date.now();
+        const timeLeft = endTime - currentTime;
         
-        // Only include active timers (not finished)
-        if (endTime > currentTime) {
-          activeTimers.push({
-            name: taskNameElement.textContent.trim(),
-            endTime: endTime,
-            timeLeft: endTime - currentTime
-          });
-        }
+        // Get task color information
+        const taskColor = task.style.borderColor || task.style.color || '#ffffff';
+        const colorKey = task.dataset.colorKey || null;
+        const customColor = task.dataset.customColor || null;
+        
+        // Include both active and ended tasks
+        const timerData = {
+          name: taskNameElement.textContent.trim(),
+          endTime: endTime,
+          timeLeft: timeLeft,
+          isActive: timeLeft > 0,
+          status: timeLeft > 0 ? 'active' : 'ended',
+          notes: notesElement ? notesElement.textContent.trim() : '',
+          color: taskColor,
+          colorKey: colorKey,
+          customColor: customColor
+        };
+        
+        allTimers.push(timerData);
       }
     });
     
-    // Sort by time remaining (shortest first)
-    activeTimers.sort((a, b) => a.timeLeft - b.timeLeft);
-    
-    // Update widget
-    await TimerWidget.updateWidget({
-      timerData: JSON.stringify(activeTimers)
+    // Sort: active timers first (by time remaining), then ended timers (by end time, most recent first)
+    allTimers.sort((a, b) => {
+      if (a.isActive && !b.isActive) return -1; // Active timers first
+      if (!a.isActive && b.isActive) return 1;
+      
+      if (a.isActive && b.isActive) {
+        return a.timeLeft - b.timeLeft; // Active: shortest time first
+      } else {
+        return b.endTime - a.endTime; // Ended: most recent first
+      }
     });
     
-    console.log('[Widget] Updated with', activeTimers.length, 'active timers');
+    // Get current theme information
+    const currentTheme = document.getElementById('themeSelect').value;
+    const isLightMode = document.body.classList.contains('light-mode');
+    const isCustomMode = document.body.classList.contains('custom-mode');
+    
+    let themeData = {
+      theme: currentTheme,
+      isLightMode: isLightMode,
+      isCustomMode: isCustomMode
+    };
+    
+    // Add custom theme colors if in custom mode
+    if (isCustomMode) {
+      themeData.customBgColor = document.getElementById('customBgColor').value;
+      themeData.customTextColor = document.getElementById('customTextColor').value;
+    }
+    
+    // Add current color palette
+    themeData.colorPalette = currentColorSet;
+    
+    // Update widget with both timer data and theme data
+    await TimerWidget.updateWidget({
+      timerData: JSON.stringify(allTimers),
+      themeData: JSON.stringify(themeData)
+    });
+    
+    const activeCount = allTimers.filter(t => t.isActive).length;
+    const endedCount = allTimers.filter(t => !t.isActive).length;
+    console.log(`[Widget] Updated with ${activeCount} active and ${endedCount} ended timers, theme: ${currentTheme}`);
   } catch (error) {
     console.error('[Widget] Error updating widget:', error);
   }
